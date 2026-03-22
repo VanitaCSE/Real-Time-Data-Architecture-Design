@@ -824,17 +824,19 @@ CREATE TABLE pricing_events (
         
         async function fetchStreamingData() {
             try {
-                // First, check health status separately
+                // First, check streaming system status using stats endpoint
                 try {
-                    const healthResponse = await fetch('http://localhost:5000/health');
-                    const healthData = await healthResponse.json();
-                    console.log('Health API Response:', healthData); // Debug log
+                    const statsResponse = await fetch('http://localhost:5000/stream/stats');
+                    const statsData = await statsResponse.json();
+                    console.log('Stats API Response:', statsData); // Debug log
                     
-                    // Update connection status based on health check
-                    updateConnectionStatus(healthData.streaming_active);
-                    console.log('Connection status updated to:', healthData.streaming_active); // Debug log
-                } catch (healthError) {
-                    console.error('Health API Error:', healthError);
+                    // Update connection status based on streaming stats
+                    // Consider connected if we have messages produced and stored
+                    const isStreamingActive = statsData.messages_produced > 0 && statsData.messages_stored > 0;
+                    updateConnectionStatus(isStreamingActive);
+                    console.log('Connection status updated to:', isStreamingActive); // Debug log
+                } catch (statsError) {
+                    console.error('Stats API Error:', statsError);
                     updateConnectionStatus(false);
                 }
                 
@@ -1301,11 +1303,10 @@ CREATE TABLE pricing_events (
         
         function startStreamingDashboard() {
             // Check authentication before loading dashboard
-            window.addEventListener('load', function() {
-                checkDashboardAuthentication();
-            });
+            checkDashboardAuthentication();
+        }
 
-            async function checkDashboardAuthentication() {
+        async function checkDashboardAuthentication() {
                 const token = localStorage.getItem('authToken');
                 
                 if (!token) {
