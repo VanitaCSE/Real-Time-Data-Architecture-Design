@@ -184,8 +184,8 @@ python streaming_app.py
 
 ## Contact & Support
 
-- Email: vanita.cse@example.com
-- LinkedIn: linkedin.com/in/vanita-cse
+- Email: vanignaikcse@gmail.com
+- LinkedIn: https://www.linkedin.com/in/vanita-naik-4454572a2?utm_source=share_via&utm_content=profile&utm_medium=member_android
 - GitHub: github.com/VanitaCSE
 
 ## Acknowledgments
