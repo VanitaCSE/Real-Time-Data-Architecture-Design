@@ -24,12 +24,6 @@ pip install -r requirements.txt
 python streaming_app.py
 ```
 
-### Access the Application
-- Main Hub: http://localhost:5000/main.html
-- Dashboard: http://localhost:5000/database_dashboard.html (after login)
-- Register: http://localhost:5000/register.html
-- Login: http://localhost:5000/login.html
-
 ## System Architecture
 
 Real-Time Data Pipeline:
@@ -175,9 +169,8 @@ python streaming_app.py
 ```
 
 ### 4. Access the System
-- Open browser and go to: http://localhost:5000/main.html
-- Register a new account or login
-- Access the live dashboard with real-time analytics
+- Register a new account or login through the authentication hub
+- Access the live dashboard with real-time analytics after authentication
 
 ## Project Highlights for Hackveda Internship
 
