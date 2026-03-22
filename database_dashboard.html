@@ -998,6 +998,20 @@ CREATE TABLE pricing_events (
             document.getElementById('eventId').textContent = `#${data.metadata?.event_id || '--'}`;
             document.getElementById('trend').textContent = data.demand?.trend || '--';
             
+            // Update pricing method
+            const pricingMethodEl = document.getElementById('pricingMethodDisplay');
+            if (pricingMethodEl) {
+                const method = data.metadata?.pricing_method || 'Unknown';
+                pricingMethodEl.textContent = method.charAt(0).toUpperCase() + method.slice(1);
+            }
+            
+            // Update cache status
+            const cacheEl = document.getElementById('cacheStatus');
+            if (cacheEl) {
+                const cache = fullResponse.metadata?.cache || 'unknown';
+                cacheEl.textContent = cache.charAt(0).toUpperCase() + cache.slice(1);
+            }
+            
             const tierEl = document.getElementById('tier');
             const tier = data.pricing?.pricing_tier || 'Unknown';
             tierEl.textContent = tier;
