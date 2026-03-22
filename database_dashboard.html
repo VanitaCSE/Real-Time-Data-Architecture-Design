@@ -1348,7 +1348,7 @@ CREATE TABLE pricing_events (
                 }
             }
 
-            function initializeDashboard() {
+        function initializeDashboard() {
             // Display current user
             const username = localStorage.getItem('username');
             if (username) {
@@ -1363,17 +1363,14 @@ CREATE TABLE pricing_events (
             setInterval(fetchStreamingData, 2000);
         }
 
-            function logout() {
-                if (confirm('Are you sure you want to logout?')) {
-                    localStorage.removeItem('authToken');
-                    localStorage.removeItem('username');
-                    alert('👋 Successfully logged out!');
-                    window.location.href = 'login.html';
-                }
+        // Global logout function - accessible from HTML onclick
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('username');
+                alert('👋 Successfully logged out!');
+                window.location.href = 'login.html';
             }
-
-            // Initialize dashboard (only if authenticated)
-            // initializeDashboard();
         }
         
         function stopStreamingDashboard() {
