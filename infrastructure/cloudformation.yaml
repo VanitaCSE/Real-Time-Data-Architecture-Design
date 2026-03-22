@@ -1,0 +1,436 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Cloud Architecture for Real-time ML Pricing System'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'production'
+    AllowedValues: ['development', 'staging', 'production']
+    Description: 'Deployment environment'
+  
+  ProjectName:
+    Type: String
+    Default: 'ml-pricing-system'
+    Description: 'Name of the project'
+
+Resources:
+  # ========================================
+  # Data Ingestion Layer
+  # ========================================
+  
+  # Kinesis Data Streams
+  PricingEventsStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub '${ProjectName}-pricing-events'
+      ShardCount: 2
+      RetentionPeriodHours: 24
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+  
+  # API Gateway
+  PricingAPI:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub '${ProjectName}-pricing-api'
+      Description: 'API for ML Pricing System'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+  
+  # API Gateway Resources
+  PricingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PricingAPI
+      ParentId: !GetAtt PricingAPI.RootResourceId
+      PathPart: 'pricing'
+  
+  CurrentPricingResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref PricingAPI
+      ParentId: !Ref PricingResource
+      PathPart: 'current'
+  
+  # API Gateway Method - GET /pricing/current
+  CurrentPricingMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref PricingAPI
+      ResourceId: !Ref CurrentPricingResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 
+          - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ServingLambda.Arn}/invocations'
+          - { ServingLambda: !Ref ServingLambda }
+  
+  # API Gateway Deployment
+  PricingAPIDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - CurrentPricingMethod
+    Properties:
+      RestApiId: !Ref PricingAPI
+  
+  # API Gateway Stage
+  PricingAPIStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref PricingAPI
+      DeploymentId: !Ref PricingAPIDeployment
+      StageName: !Ref Environment
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          ThrottlingBurstLimit: 100
+          ThrottlingRateLimit: 50
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+  
+  # ========================================
+  # Processing Layer
+  # ========================================
+  
+  # Lambda Function - Stream Processor
+  StreamProcessorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-stream-processor'
+      Runtime: python3.9
+      Handler: stream_processor.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+            return {
+              'statusCode': 200,
+              'body': json.dumps({'message': 'Stream processor'})
+            }
+      Environment:
+        Variables:
+          KINESIS_STREAM: !Ref PricingEventsStream
+          S3_BUCKET: !Ref DataLakeBucket
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+  
+  # Lambda Function - Serving Layer
+  ServingLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-serving-api'
+      Runtime: python3.9
+      Handler: api_service.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+            return {
+              'statusCode': 200,
+              'body': json.dumps({
+                'pricing': {'current_price': 125.50, 'currency': 'USD'},
+                'demand': {'current_demand': 75, 'moving_average': 72.3}
+              })
+            }
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref PricingTable
+          REDIS_HOST: !GetAtt ElastiCacheRedis.RedisEndpoint.Address
+          REDIS_PORT: !GetAtt ElastiCacheRedis.RedisEndpoint.Port
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+  
+  # Event Source Mapping - Kinesis to Lambda
+  StreamProcessorEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 100
+      StartingPosition: LATEST
+      EventSourceArn: !GetAtt PricingEventsStream.Arn
+      FunctionName: !GetAtt StreamProcessorLambda.Arn
+  
+  # ========================================
+  # Storage Layer
+  # ========================================
+  
+  # S3 Data Lake
+  DataLakeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-data-lake-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: 'RawDataLifecycle'
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+              - TransitionInDays: 365
+                StorageClass: DEEP_ARCHIVE
+            Filter:
+              Prefix: 'raw/'
+          - Id: 'ProcessedDataLifecycle'
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 60
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 180
+                StorageClass: GLACIER
+            Filter:
+              Prefix: 'processed/'
+  
+  # DynamoDB Table
+  PricingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-pricing'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: 'event_id'
+          AttributeType: 'N'
+        - AttributeName: 'timestamp'
+          AttributeType: 'S'
+      KeySchema:
+        - AttributeName: 'event_id'
+          KeyType: 'HASH'
+        - AttributeName: 'timestamp'
+          KeyType: 'RANGE'
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      GlobalSecondaryIndexes:
+        - IndexName: 'DemandIndex'
+          KeySchema:
+            - AttributeName: 'timestamp'
+              KeyType: 'HASH'
+          Projection:
+            ProjectionType: ALL
+  
+  # ElastiCache Redis
+  ElastiCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: 'Subnet group for ElastiCache Redis'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+  
+  ElastiCacheRedis:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Sub '${ProjectName}-redis'
+      Description: 'Redis cluster for pricing system cache'
+      NumCacheClusters: 2
+      Engine: redis
+      CacheNodeType: cache.t3.micro
+      CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
+      SecurityGroupIds:
+        - !Ref CacheSecurityGroup
+      AutomaticFailoverEnabled: true
+      MultiAZEnabled: true
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: true
+  
+  # ========================================
+  # Monitoring & Security
+  # ========================================
+  
+  # CloudWatch Log Groups
+  StreamProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${StreamProcessorLambda}'
+      RetentionInDays: 14
+  
+  ServingLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${ServingLambda}'
+      RetentionInDays: 14
+  
+  # CloudWatch Alarms
+  StreamProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-stream-processor-errors'
+      AlarmDescription: 'Stream processor Lambda error rate too high'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref StreamProcessorLambda
+      AlarmActions:
+        - !Ref SNSTopicAlerts
+  
+  # SNS Topic for Alerts
+  SNSTopicAlerts:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-alerts'
+  
+  # ========================================
+  # IAM Roles
+  # ========================================
+  
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-execution'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: !Sub '${ProjectName}-lambda-policies'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - kinesis:GetRecords
+                  - kinesis:GetShardIterator
+                  - kinesis:DescribeStream
+                  - kinesis:ListStreams
+                Resource: !GetAtt PricingEventsStream.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !Ref DataLakeBucket
+                  - !Sub '${DataLakeBucket}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt PricingTable.Arn
+                  - !Sub '${PricingTable.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - elasticache:Connect
+                Resource: !GetAtt ElastiCacheRedis.Arn
+  
+  # ========================================
+  # Networking
+  # ========================================
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc'
+  
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-subnet-1'
+  
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-private-subnet-2'
+  
+  CacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for ElastiCache Redis'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !GetAtt LambdaSecurityGroup.GroupId
+  
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for Lambda functions'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+  # API Gateway
+  APIGatewayURL:
+    Description: 'API Gateway URL'
+    Value: !Sub 'https://${PricingAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+  
+  # Kinesis Stream
+  KinesisStreamName:
+    Description: 'Kinesis Stream Name'
+    Value: !Ref PricingEventsStream
+  
+  # S3 Bucket
+  DataLakeBucketName:
+    Description: 'S3 Data Lake Bucket Name'
+    Value: !Ref DataLakeBucket
+  
+  # DynamoDB Table
+  DynamoDBTableName:
+    Description: 'DynamoDB Table Name'
+    Value: !Ref PricingTable
+  
+  # ElastiCache
+  RedisEndpoint:
+    Description: 'ElastiCache Redis Endpoint'
+    Value: !GetAtt ElastiCacheRedis.RedisEndpoint.Address
+  
+  # Lambda Functions
+  StreamProcessorLambdaArn:
+    Description: 'Stream Processor Lambda ARN'
+    Value: !GetAtt StreamProcessorLambda.Arn
+  
+  ServingLambdaArn:
+    Description: 'Serving Layer Lambda ARN'
+    Value: !GetAtt ServingLambda.Arn
+  
+  # Monitoring
+  SNSTopicARN:
+    Description: 'SNS Topic ARN for alerts'
+    Value: !Ref SNSTopicAlerts

@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Pricing System - Welcome</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .main-container {
+            background: white;
+            padding: 50px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            color: #2d3748;
+            font-size: 32px;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+
+        .auth-section {
+            margin-bottom: 30px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+            transform: translateY(-1px);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(72, 187, 120, 0.3);
+        }
+
+        .divider {
+            margin: 30px 0;
+            color: #a0aec0;
+            font-size: 14px;
+        }
+
+        .user-info {
+            background: #f7fafc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .user-info h3 {
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+
+        .user-info p {
+            color: #718096;
+            margin: 5px 0;
+        }
+
+        .features {
+            background: #edf2f7;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .features h4 {
+            color: #2d3748;
+            margin-bottom: 15px;
+        }
+
+        .feature-list {
+            text-align: left;
+            color: #4a5568;
+            font-size: 14px;
+        }
+
+        .feature-list li {
+            margin: 8px 0;
+            list-style: none;
+            position: relative;
+            padding-left: 25px;
+        }
+
+        .feature-list li:before {
+            content: "✅";
+            position: absolute;
+            left: 0;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-info {
+            background-color: #bee3f8;
+            color: #2c5282;
+            border: 1px solid #90cdf4;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            margin: 20px 0;
+        }
+
+        .logout-btn {
+            background: #e53e3e;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+
+        .logout-btn:hover {
+            background: #c53030;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="logo">🚀</div>
+        <h1 class="title">Real-Time Pricing System</h1>
+        <p class="subtitle">Advanced Analytics & ML-Powered Insights</p>
+
+        <div class="alert alert-info" id="infoAlert"></div>
+        <div class="loading" id="loading">Checking authentication...</div>
+
+        <!-- Auth Section for Non-Logged Users -->
+        <div id="authSection" class="auth-section">
+            <a href="register.html" class="btn btn-primary">📝 Create New Account</a>
+            <a href="login.html" class="btn btn-secondary">🔐 Sign In</a>
+            <a href="forgot_password.html" class="btn btn-secondary">🔑 Forgot Password?</a>
+        </div>
+
+        <!-- Dashboard Section for Logged Users -->
+        <div id="dashboardSection" style="display: none;">
+            <div class="user-info">
+                <h3>👤 Welcome back!</h3>
+                <p><strong>Username:</strong> <span id="username">--</span></p>
+                <p><strong>Full Name:</strong> <span id="fullname">--</span></p>
+                <p><strong>Status:</strong> <span style="color: #48bb78;">🟢 Authenticated</span></p>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+            
+            <a href="database_dashboard.html" class="btn btn-success">📊 Open Streaming Dashboard</a>
+            
+            <div class="features">
+                <h4>🎯 Dashboard Features:</h4>
+                <ul class="feature-list">
+                    <li>Real-time pricing data with ML predictions</li>
+                    <li>Live streaming statistics and analytics</li>
+                    <li>Window analytics and trend analysis</li>
+                    <li>Machine Learning model insights</li>
+                    <li>Performance metrics and monitoring</li>
+                    <li>24-hour historical analytics</li>
+                    <li>Professional business intelligence</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="divider">
+            <p style="color: #718096; font-size: 14px;">� Secure Authentication Required</p>
+        </div>
+
+        <!-- Help Section -->
+        <div class="help-section">
+            <p style="color: #718096; font-size: 12px;">
+                Need help? Contact support for assistance with your account.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Check authentication status on page load
+        window.addEventListener('load', function() {
+            checkAuthentication();
+        });
+
+        async function checkAuthentication() {
+            const token = localStorage.getItem('authToken');
+            const username = localStorage.getItem('username');
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('dashboardSection').style.display = 'none';
+            
+            if (token && username) {
+                try {
+                    // Verify token with backend
+                    const response = await fetch('http://localhost:5000/auth/verify', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            token: token
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.valid) {
+                        // Token is valid, show dashboard section
+                        showDashboardSection(username, data.fullname || username);
+                    } else {
+                        // Token is invalid, clear and show auth section
+                        clearAuthAndShowAuth();
+                    }
+                    
+                } catch (error) {
+                    console.log('Token verification failed, showing auth section');
+                    clearAuthAndShowAuth();
+                }
+            } else {
+                // No token, show auth section
+                showAuthSection();
+            }
+            
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showDashboardSection(username, fullname) {
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('dashboardSection').style.display = 'block';
+            document.getElementById('username').textContent = username;
+            document.getElementById('fullname').textContent = fullname;
+            
+            // Show info message
+            document.getElementById('infoAlert').textContent = '✅ Successfully authenticated! You can now access the streaming dashboard.';
+            document.getElementById('infoAlert').style.display = 'block';
+        }
+
+        function showAuthSection() {
+            document.getElementById('authSection').style.display = 'block';
+            document.getElementById('dashboardSection').style.display = 'none';
+            document.getElementById('infoAlert').style.display = 'none';
+        }
+
+        function clearAuthAndShowAuth() {
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('username');
+            showAuthSection();
+            
+            document.getElementById('infoAlert').textContent = '⚠️ Session expired. Please login again.';
+            document.getElementById('infoAlert').style.display = 'block';
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('username');
+                
+                document.getElementById('infoAlert').textContent = '👋 Successfully logged out!';
+                document.getElementById('infoAlert').style.display = 'block';
+                
+                // Show auth section after logout
+                setTimeout(() => {
+                    showAuthSection();
+                }, 1000);
+            }
+        }
+
+        // Check if user is coming from login/register with success
+        const urlParams = new URLSearchParams(window.location.search);
+        const message = urlParams.get('message');
+        if (message) {
+            document.getElementById('infoAlert').textContent = decodeURIComponent(message);
+            document.getElementById('infoAlert').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
